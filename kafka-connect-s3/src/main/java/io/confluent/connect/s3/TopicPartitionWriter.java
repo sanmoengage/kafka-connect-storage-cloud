@@ -19,6 +19,7 @@ import com.amazonaws.SdkClientException;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.errors.PartitionException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
@@ -35,9 +36,12 @@ import org.slf4j.LoggerFactory;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -286,16 +290,21 @@ public class TopicPartitionWriter {
     if (compatibility.shouldChangeSchema(record, null, currentValueSchema)
         && recordCount > 0) {
       // This branch is never true for the first record read by this TopicPartitionWriter
-      log.trace(
-          "Incompatible change of schema detected for record '{}' with encoded partition "
-          + "'{}' and current offset: '{}'",
-          record,
-          encodedPartition,
-          currentOffset
-      );
-      currentSchemas.put(encodedPartition, valueSchema);
-      nextState();
-      return true;
+      if (!checkIfFieldsContained(currentValueSchema, record.valueSchema())) {
+        log.trace(
+                "Incompatible change of schema detected for record '{}' with encoded partition "
+                        + "'{}' and current offset: '{}' and record_schema_version: '{}' "
+                        + "and previous_schema_version: '{}'",
+                record,
+                encodedPartition,
+                currentOffset,
+                record.valueSchema().version(),
+                currentValueSchema.version()
+        );
+        currentSchemas.put(encodedPartition, valueSchema);
+        nextState();
+        return true;
+      }
     }
 
     SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
@@ -316,6 +325,44 @@ public class TopicPartitionWriter {
       return true;
     }
 
+    return false;
+  }
+
+  private boolean checkIfFieldsContained(Schema schema, Schema newSchema) {
+    List<Field> fields1 = schema.fields();
+    List<Field> fields2 = newSchema.fields();
+    Map<String, Field> fieldsMap1 = fields1.stream()
+                                           .collect(Collectors.toMap(Field::name,
+                                                                     Function.identity()));
+    Map<String, Field> fieldsMap2 = fields2.stream()
+                                           .collect(Collectors.toMap(Field::name,
+                                                                     Function.identity()));
+
+    if (fieldsMap1.keySet().containsAll(fieldsMap2.keySet())) {
+      Map<String, Field> correlatedMap = new HashMap<>(fieldsMap1);
+      correlatedMap.keySet().retainAll(fieldsMap2.keySet());
+      for (Map.Entry<String, Field> entry: correlatedMap.entrySet()) {
+        Field field1 = entry.getValue();
+        Field field2 = fieldsMap2.get(entry.getKey());
+        if (!compareFields(field1, field2)) {
+          return false;
+        }
+      }
+    } else {
+      return false;
+    }
+
+    return true;
+  }
+
+  private boolean compareFields(Field field1, Field field2) {
+    if (field1 != null && field2 != null && field1.name().equals(field2.name())) {
+      if (!field1.schema().type().isPrimitive() && field1.schema().type() == Schema.Type.STRUCT) {
+        return checkIfFieldsContained(field1.schema(), field2.schema());
+      } else {
+        return field1.schema().type() == field2.schema().type();
+      }
+    }
     return false;
   }
 
