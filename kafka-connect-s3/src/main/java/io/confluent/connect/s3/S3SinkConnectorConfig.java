@@ -172,6 +172,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String HEADERS_FORMAT_CLASS_CONFIG = "headers.format.class";
   public static final Class<? extends Format> HEADERS_FORMAT_CLASS_DEFAULT = AvroFormat.class;
 
+  public static final String SCHEMA_FIELDS_CONTAINED_CHECK_ENABLED_CONFIG = "schema.fields."
+          + "contained.check.enabled";
+  public static final boolean SCHEMA_FIELDS_CONTAINED_CHECK_ENABLED_DEFAULT = false;
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -663,6 +667,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.SHORT,
           "Enable Path Style Access to S3"
       );
+
+      configDef.define(
+              SCHEMA_FIELDS_CONTAINED_CHECK_ENABLED_CONFIG,
+              Type.BOOLEAN,
+              SCHEMA_FIELDS_CONTAINED_CHECK_ENABLED_DEFAULT,
+              Importance.LOW,
+              "Specifies whether or not to enable to enable schema fields contained check used for"
+                      + " file rotation",
+              group,
+              ++orderInGroup,
+              Width.SHORT,
+              "Enable Fields Contained check between schemas"
+      );
     }
     return configDef;
   }
@@ -736,6 +753,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getPartSize() {
     return getInt(PART_SIZE_CONFIG);
+  }
+
+  public boolean getSchemaFieldsContainedCheckEnabled() {
+    return getBoolean(SCHEMA_FIELDS_CONTAINED_CHECK_ENABLED_CONFIG);
   }
 
   @SuppressWarnings("unchecked")

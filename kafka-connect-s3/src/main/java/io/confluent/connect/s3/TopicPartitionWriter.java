@@ -290,7 +290,14 @@ public class TopicPartitionWriter {
     if (compatibility.shouldChangeSchema(record, null, currentValueSchema)
         && recordCount > 0) {
       // This branch is never true for the first record read by this TopicPartitionWriter
-      if (!checkIfFieldsContained(currentValueSchema, record.valueSchema())) {
+      boolean shouldChange = true;
+
+      if (connectorConfig.getSchemaFieldsContainedCheckEnabled()
+              && !checkIfFieldsContained(currentValueSchema, record.valueSchema())) {
+        shouldChange = false;
+      }
+
+      if (shouldChange) {
         log.trace(
                 "Incompatible change of schema detected for record '{}' with encoded partition "
                         + "'{}' and current offset: '{}' and record_schema_version: '{}' "
