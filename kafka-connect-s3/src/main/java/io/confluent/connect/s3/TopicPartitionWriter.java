@@ -293,7 +293,7 @@ public class TopicPartitionWriter {
       boolean shouldChange = true;
 
       if (connectorConfig.getSchemaFieldsContainedCheckEnabled()
-              && !checkIfFieldsContained(currentValueSchema, record.valueSchema())) {
+              && checkIfFieldsContained(currentValueSchema, record.valueSchema())) {
         shouldChange = false;
       }
 
